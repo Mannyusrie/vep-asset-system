@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PM Dashboard | V.E.P</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        body { background: #000; color: #fff; padding-bottom: 150px; transition: background 0.1s; }
+        .container { padding: 15px; }
+        #reader-wrapper { display: none; border: 2px solid var(--saber-blue); border-radius: 20px; overflow: hidden; margin: 15px 0; }
+        .scan-list-card { background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 15px; padding: 15px; margin-top: 20px; }
+        .scan-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #111; }
+        .item-info b { color: var(--saber-blue); font-size: 14px; display: block; }
+        .item-info small { color: #555; font-size: 10px; }
+        .footer-submit { position: fixed; bottom: 0; left: 0; width: 100%; background: #050505; border-top: 1px solid var(--saber-blue); padding: 20px; box-sizing: border-box; z-index: 1000; }
+        .request-card { border: 1px solid #facc15 !important; margin-top: 30px; background: rgba(250, 204, 21, 0.05); }
+        .request-card h2 { color: #facc15 !important; font-size: 14px; margin-top: 0; }
+        label { color: var(--saber-blue); font-size: 11px; margin-top: 10px; display: block; text-transform: uppercase; }
+        .input-dark { background: #111; border: 1px solid #222; color: #fff; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-top: 5px; }
+        .btn-remove { color: #ff4444; background: none; border: 1px solid #ff4444; padding: 4px 8px; border-radius: 5px; font-size: 10px; }
+        .scan-success-flash { background: #004466 !important; }
+    </style>
+</head>
+<body>
+
+<header style="padding: 15px; text-align: center; border-bottom: 1px solid rgba(0,210,255,0.1);">
+    <h1 style="font-size: 14px; letter-spacing: 2px; color: var(--saber-blue);">V.E.P | ASSET TRACKER</h1>
+</header>
+
+<div class="container">
+    <div class="card">
+        <label>Project Manager</label>
+        <input id="pmName" placeholder="Your Name" class="input-dark" oninput="localStorage.setItem('pmName', this.value)">
+        <label>Event / Job Name</label>
+        <input id="jobName" placeholder="e.g. Petronas Event" class="input-dark">
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold;">📷 START SCANNING</button>
+        <div id="reader-wrapper">
+            <div id="reader"></div>
+            <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px;">STOP CAMERA</button>
+        </div>
+    </div>
+
+    <div id="listContainer" class="scan-list-card" style="display:none;">
+        <h3 style="font-size: 12px; margin: 0 0 15px 0; color: #fff;">ITEMS IN CART <span id="count" style="background:var(--saber-blue); color:#000; padding:2px 8px; border-radius:10px; margin-left:5px;">0</span></h3>
+        <div id="itemList"></div>
+    </div>
+
+    <div class="card request-card">
+        <h2>REQUEST NEW ASSET</h2>
+        <input id="reqItem" placeholder="Item Name" class="input-dark">
+        <label style="color:#facc15;">PHOTO (OPTIONAL)</label>
+        <input type="file" id="reqPhoto" accept="image/*" capture="environment" style="margin-top:5px;">
+        <button id="btnRequest" onclick="sendRequest()" style="border-color: #facc15; color: #facc15; margin-top: 15px; width: 100%;">SEND REQUEST</button>
+    </div>
+</div>
+
+<div id="submitFooter" class="footer-submit" style="display:none;">
+    <label>SET DESTINATION</label>
+    <select id="destLoc" class="input-dark" style="margin-bottom: 12px;">
+        <option value="ON VENUE / OTHERS">ON VENUE / OTHERS</option>
+        <option value="OFFICE">OFFICE</option>
+        <option value="STORE">MAIN STORE</option>
+    </select>
+    <button id="submitBtn" onclick="confirmAndSubmit()" style="width:100%; background: var(--saber-blue); color: #000; font-weight: bold; padding: 15px;">STAMP ALL ASSETS</button>
+</div>
+
+<script>
+// --- FIREBASE CONFIG ---
+const firebaseConfig = {
+    apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
+    authDomain: "vep-inventory.firebaseapp.com",
+    databaseURL: "https://vep-inventory-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "vep-inventory",
+    storageBucket: "vep-inventory.firebasestorage.app",
+    messagingSenderId: "858682132166",
+    appId: "1:858682132166:web:fa05f064398fe418afb9c7"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let scanner;
+let basket = [];
+let isProcessing = false;
+
+function playSystemBeep() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'square'; 
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch(e) { console.log(e); }
+}
+
+window.onload = () => {
+    if(localStorage.getItem('pmName')) document.getElementById('pmName').value = localStorage.getItem('pmName');
+};
+
+function triggerFeedback() {
+    playSystemBeep();
+    if(window.navigator.vibrate) window.navigator.vibrate(100);
+    document.body.classList.add('scan-success-flash');
+    setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
+}
+
+async function toggleScanner(start) {
+    if(start) {
+        const pm = document.getElementById('pmName').value;
+        if(!pm) return alert("Please enter your name first!");
+        document.getElementById('startBtn').style.display = 'none';
+        document.getElementById('reader-wrapper').style.display = 'block';
+        if(!scanner) scanner = new Html5Qrcode("reader");
+        scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (text) => {
+            if(!isProcessing) {
+                isProcessing = true;
+                handleScannedCode(text);
+                setTimeout(() => { isProcessing = false; }, 1000); 
+            }
+        });
+    } else {
+        if(scanner) await scanner.stop();
+        document.getElementById('reader-wrapper').style.display = 'none';
+        document.getElementById('startBtn').style.display = 'block';
+    }
+}
+
+function handleScannedCode(id) {
+    if(basket.find(x => x.id === id)) return;
+    db.ref("items/" + id).once("value", (snap) => {
+        const data = snap.val();
+        if(data) {
+            triggerFeedback();
+            basket.push({ id: id, name: data.name });
+            renderList();
+        }
+    });
+}
+
+function renderList() {
+    const listDiv = document.getElementById('itemList');
+    const container = document.getElementById('listContainer');
+    const footer = document.getElementById('submitFooter');
+    listDiv.innerHTML = "";
+    basket.forEach((item, index) => {
+        listDiv.innerHTML += `
+            <div class="scan-item">
+                <div class="item-info"><b>${item.name}</b><small>${item.id}</small></div>
+                <button class="btn-remove" onclick="remove(${index})">REMOVE</button>
+            </div>`;
+    });
+    document.getElementById('count').innerText = basket.length;
+    container.style.display = basket.length > 0 ? "block" : "none";
+    footer.style.display = basket.length > 0 ? "block" : "none";
+}
+
+function remove(index) { basket.splice(index, 1); renderList(); }
+
+async function confirmAndSubmit() {
+    const pm = document.getElementById('pmName').value.trim();
+    const job = document.getElementById('jobName').value.trim();
+    const loc = document.getElementById('destLoc').value;
+    
+    if(!pm || !job) return alert("Fill in Name and Event Name!");
+    if(basket.length === 0) return;
+    if(!confirm(`Submit ${basket.length} items to ${loc}?`)) return;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.innerText = "UPDATING...";
+    const now = Date.now();
+    const updates = {};
+
+    basket.forEach(item => {
+        // Sync ke item data supaya Production nampak
+        updates[`items/${item.id}/location`] = loc;
+        updates[`items/${item.id}/pm`] = pm;
+        updates[`items/${item.id}/job`] = job;
+        updates[`items/${item.id}/lastUpdate`] = now;
+        
+        // Simpan dalam logs
+        const logKey = db.ref("logs").push().key;
+        updates[`logs/${logKey}`] = {
+            itemId: item.id, itemName: item.name, location: loc,
+            pmName: pm, notes: "Job: " + job, timestamp: now
+        };
+    });
+
+    try {
+        await db.ref().update(updates);
+        alert("Success!");
+        location.reload();
+    } catch(e) { alert("Error!"); btn.disabled = false; }
+}
+
+async function sendRequest() {
+    const pm = document.getElementById('pmName').value;
+    const item = document.getElementById('reqItem').value;
+    const file = document.getElementById('reqPhoto').files[0];
+    const btn = document.getElementById('btnRequest');
+    if(!pm || !item) return alert("Name and Item required!");
+    btn.disabled = true; btn.innerText = "SENDING...";
+    let imgBase64 = "";
+    if(file) {
+        imgBase64 = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+    }
+    db.ref("requests").push({
+        name: item, requestedBy: pm, itemImage: imgBase64, timestamp: Date.now()
+    }).then(() => {
+        alert("Request sent!");
+        document.getElementById('reqItem').value = "";
+        btn.disabled = false; btn.innerText = "SEND REQUEST";
+    });
+}
+</script>
+</body>
+</html>
