@@ -90,7 +90,7 @@
     <select id="destLoc" class="input-dark" style="margin-bottom: 12px;">
         <option value="ON VENUE / OTHERS">ON VENUE / OTHERS</option>
         <option value="OFFICE">OFFICE</option>
-        <option value="STORE">MAIN STORE</option>
+        <option value="MAIN STORE">MAIN STORE</option>
     </select>
     <button id="submitBtn" onclick="confirmAndSubmit()" style="width:100%; background: var(--saber-blue); color: #000; font-weight: bold; padding: 15px; border:none; border-radius:10px;">STAMP ALL ASSETS</button>
 </div>
@@ -113,50 +113,22 @@ let scanner;
 let basket = [];
 let activeReportId = null;
 
-// --- SOUND EFFECTS ---
-function playSuccessSound() {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-}
-
-function playErrorSound() {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const playBuzzer = (startTime) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, startTime);
-        gain.gain.setValueAtTime(0.2, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
-        osc.start(startTime); osc.stop(startTime + 0.3);
-    };
-    playBuzzer(audioCtx.currentTime);
-    playBuzzer(audioCtx.currentTime + 0.4);
-}
-
-window.onload = () => {
-    if(localStorage.getItem('pmName')) document.getElementById('pmName').value = localStorage.getItem('pmName');
-};
-
+// --- FEEDBACK FUNCTIONS ---
 function triggerFeedback(type) {
     if(type === 'success') {
-        playSuccessSound();
         if(window.navigator.vibrate) window.navigator.vibrate(100);
         document.body.classList.add('scan-success-flash');
         setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
     } else {
-        playErrorSound();
         if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
         document.body.classList.add('scan-error-flash');
         setTimeout(() => { document.body.classList.remove('scan-error-flash'); }, 300);
     }
 }
+
+window.onload = () => {
+    if(localStorage.getItem('pmName')) document.getElementById('pmName').value = localStorage.getItem('pmName');
+};
 
 async function toggleScanner(start) {
     if(start) {
@@ -166,7 +138,6 @@ async function toggleScanner(start) {
         document.getElementById('reader-wrapper').style.display = 'block';
         if(!scanner) scanner = new Html5Qrcode("reader");
         scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, async (text) => {
-            // AUTO STOP CAMERA IMMEDIATELY AFTER SCAN
             await toggleScanner(false);
             handleScannedCode(text);
         });
@@ -178,31 +149,26 @@ async function toggleScanner(start) {
 }
 
 function handleScannedCode(id) {
-    if(basket.find(x => x.id === id)) {
-        alert("This item is already in your cart.");
-        return;
-    }
+    if(basket.find(x => x.id === id)) return alert("Item already in cart.");
     db.ref("items/" + id).once("value", (snap) => {
         const data = snap.val();
         if(data) {
             if(data.status === "DAMAGED") {
                 triggerFeedback('error');
-                alert(`🚫 ACCESS DENIED!\n\nItem: ${data.name}\nStatus: DAMAGED / MAINTENANCE\nIssue: ${data.lastReport || "Not specified"}\n\nPlease return this item to the store!`);
+                alert(`🚫 DAMAGED!\nItem: ${data.name}\nIssue: ${data.lastReport || "-"}`);
                 return;
             }
             triggerFeedback('success');
             basket.push({ id: id, name: data.name });
             renderList();
         } else {
-            alert("Item not found in database!");
+            alert("Item not found!");
         }
     });
 }
 
 function renderList() {
     const listDiv = document.getElementById('itemList');
-    const container = document.getElementById('listContainer');
-    const footer = document.getElementById('submitFooter');
     listDiv.innerHTML = "";
     basket.forEach((item, index) => {
         listDiv.innerHTML += `
@@ -215,15 +181,15 @@ function renderList() {
             </div>`;
     });
     document.getElementById('count').innerText = basket.length;
-    container.style.display = basket.length > 0 ? "block" : "none";
-    footer.style.display = basket.length > 0 ? "block" : "none";
+    document.getElementById('listContainer').style.display = basket.length > 0 ? "block" : "none";
+    document.getElementById('submitFooter').style.display = basket.length > 0 ? "block" : "none";
 }
 
 function remove(index) { basket.splice(index, 1); renderList(); }
 
 function openReport(id, name) {
     activeReportId = id;
-    document.getElementById('targetItemName').innerText = "Item: " + name + " (" + id + ")";
+    document.getElementById('targetItemName').innerText = "Item: " + name;
     document.getElementById('reportModal').style.display = 'block';
 }
 
@@ -234,52 +200,50 @@ function closeReport() {
 
 async function submitDamageReport() {
     const desc = document.getElementById('repDesc').value.trim();
-    const severity = document.getElementById('repSeverity').value;
     const pm = document.getElementById('pmName').value;
-    if(!desc) return alert("Please describe the issue!");
-    const now = Date.now();
+    if(!desc) return alert("Describe the issue!");
     const updates = {};
     updates[`items/${activeReportId}/status`] = "DAMAGED";
     updates[`items/${activeReportId}/lastReport`] = desc;
     updates[`items/${activeReportId}/pm`] = pm;
-    const logKey = db.ref("logs").push().key;
-    updates[`logs/${logKey}`] = {
-        itemId: activeReportId, location: "REPORTED DAMAGED", pmName: pm, notes: `[${severity}] ${desc}`, timestamp: now
-    };
-    try {
-        await db.ref().update(updates);
-        alert("Report Submitted! Item status changed to DAMAGED.");
-        basket = basket.filter(item => item.id !== activeReportId);
-        renderList();
-        closeReport();
-    } catch(e) { alert("Error updating database!"); }
+    await db.ref().update(updates);
+    alert("Reported!");
+    basket = basket.filter(item => item.id !== activeReportId);
+    renderList();
+    closeReport();
 }
 
 async function confirmAndSubmit() {
     const pm = document.getElementById('pmName').value.trim();
     const job = document.getElementById('jobName').value.trim();
     const loc = document.getElementById('destLoc').value;
-    if(!pm || !job) return alert("Please fill in your Name and Job Name!");
-    if(basket.length === 0) return;
-    if(!confirm(`Submit ${basket.length} items to ${loc}?`)) return;
+
+    if(!pm || !job) return alert("Fill in PM Name and Job Name!");
+    if(!confirm(`Stamp ${basket.length} items to ${loc}?`)) return;
+
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.innerText = "UPDATING...";
+    
     const now = Date.now();
     const updates = {};
+    const isInStore = ["OFFICE", "MAIN STORE"].includes(loc);
+
     basket.forEach(item => {
         updates[`items/${item.id}/location`] = loc;
         updates[`items/${item.id}/pm`] = pm;
         updates[`items/${item.id}/job`] = job;
-        updates[`items/${item.id}/status`] = loc === "STORE" ? "AVAILABLE" : "IN USE";
+        updates[`items/${item.id}/status`] = isInStore ? "Available" : "In Use";
         updates[`items/${item.id}/lastUpdate`] = now;
+        
         const logKey = db.ref("logs").push().key;
         updates[`logs/${logKey}`] = {
-            itemId: item.id, itemName: item.name, location: loc, pmName: pm, notes: "Job: " + job, timestamp: now
+            itemId: item.id, itemName: item.name, location: loc, pmName: pm, timestamp: now, notes: "Job: " + job
         };
     });
+
     try {
         await db.ref().update(updates);
-        alert("Success! Assets stamped.");
+        alert("Success!");
         location.reload();
     } catch(e) { alert("Error!"); btn.disabled = false; }
 }
@@ -288,24 +252,19 @@ async function sendRequest() {
     const pm = document.getElementById('pmName').value;
     const item = document.getElementById('reqItem').value;
     const file = document.getElementById('reqPhoto').files[0];
-    const btn = document.getElementById('btnRequest');
     if(!pm || !item) return alert("Name and Item required!");
-    btn.disabled = true; btn.innerText = "SENDING...";
+    
     let imgBase64 = "";
     if(file) {
-        imgBase64 = await new Promise(resolve => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
+        const reader = new FileReader();
+        imgBase64 = await new Promise(r => {
+            reader.onload = (e) => r(e.target.result);
             reader.readAsDataURL(file);
         });
     }
-    db.ref("requests").push({
-        name: item, requestedBy: pm, itemImage: imgBase64, timestamp: Date.now()
-    }).then(() => {
-        alert("Request Sent!");
-        document.getElementById('reqItem').value = "";
-        btn.disabled = false; btn.innerText = "SEND REQUEST";
-    });
+    
+    db.ref("requests").push({ name: item, requestedBy: pm, itemImage: imgBase64, timestamp: Date.now() })
+    .then(() => { alert("Requested!"); location.reload(); });
 }
 </script>
 </body>

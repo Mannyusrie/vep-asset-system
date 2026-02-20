@@ -30,7 +30,14 @@
         }
         .btn-delete:hover { background: #ff4444; color: #fff; box-shadow: 0 0 10px #ff4444; }
         
-        /* New Styles for Damage & Request */
+        .filter-bar {
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+            padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid #222;
+        }
+        .filter-input {
+            background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; flex: 1; min-width: 150px;
+        }
+        
         #requestSection, #damageSection { margin-bottom: 25px; border-radius: 15px; overflow: hidden; }
         #requestSection { border: 2px solid #facc15; box-shadow: 0 0 15px rgba(250, 204, 21, 0.1); }
         #damageSection { border: 2px solid #ff4444; box-shadow: 0 0 15px rgba(255, 68, 68, 0.1); }
@@ -92,8 +99,7 @@
                 <label>INITIAL LOCATION</label>
                 <select id="invLoc">
                     <option value="OFFICE">OFFICE</option>
-                    <option value="OFFICE STORE">OFFICE STORE</option>
-                    <option value="STORE">STORE</option>
+                    <option value="MAIN STORE">MAIN STORE</option>
                 </select>
             </div>
             <div>
@@ -107,6 +113,22 @@
 
     <div class="card">
         <h2>CLOUD INVENTORY</h2>
+        
+        <div class="filter-bar">
+            <input type="text" id="searchBox" class="filter-input" placeholder="Search name or category..." onkeyup="runFilters()">
+            
+            <select id="filterLoc" class="filter-input" onchange="runFilters()">
+                <option value="ALL">ALL LOCATIONS</option>
+                <option value="OFFICE">OFFICE</option>
+                <option value="MAIN STORE">MAIN STORE</option>
+                <option value="ON VENUE / OTHERS">ON VENUE / OTHERS</option>
+            </select>
+
+            <select id="filterCat" class="filter-input" onchange="runFilters()">
+                <option value="ALL">ALL CATEGORIES</option>
+            </select>
+        </div>
+
         <div style="overflow-x: auto;">
             <table>
                 <thead>
@@ -147,7 +169,81 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// --- IMAGE HELPERS ---
+// --- SEARCH & FILTER ---
+function runFilters() {
+    const search = document.getElementById('searchBox').value.toUpperCase();
+    const loc = document.getElementById('filterLoc').value;
+    const cat = document.getElementById('filterCat').value;
+    const rows = document.querySelectorAll("#inventoryTable tr");
+
+    rows.forEach(row => {
+        const name = row.cells[1].innerText.toUpperCase();
+        const category = row.cells[2].innerText.toUpperCase();
+        const location = row.cells[3].innerText.toUpperCase();
+
+        const matchSearch = name.includes(search) || category.includes(search);
+        const matchLoc = (loc === "ALL") || location.includes(loc);
+        const matchCat = (cat === "ALL") || category === cat;
+
+        row.style.display = (matchSearch && matchLoc && matchCat) ? "" : "none";
+    });
+}
+
+function updateCategoryDropdown(items) {
+    const dropdown = document.getElementById('filterCat');
+    const categories = new Set();
+    Object.values(items).forEach(item => { if(item.category) categories.add(item.category.toUpperCase()); });
+    const currentSelection = dropdown.value;
+    dropdown.innerHTML = '<option value="ALL">ALL CATEGORIES</option>';
+    Array.from(categories).sort().forEach(c => { dropdown.innerHTML += `<option value="${c}">${c}</option>`; });
+    dropdown.value = currentSelection;
+}
+
+// --- CORE REAL-TIME ---
+db.ref("items").on("value", (snap) => {
+    const table = document.getElementById("inventoryTable");
+    const damageTable = document.getElementById("damageTable");
+    const damageSection = document.getElementById("damageSection");
+    table.innerHTML = ""; damageTable.innerHTML = "";
+    let damageCount = 0;
+    const allData = snap.val() || {};
+    updateCategoryDropdown(allData);
+
+    snap.forEach((child) => {
+        const item = child.val();
+        // Lokasi "Available" ialah OFFICE atau MAIN STORE
+        const isInStore = ["OFFICE", "MAIN STORE"].includes(item.location);
+        const imgTag = item.image ? `<img src="${item.image}" class="item-img" onclick="window.open(this.src)">` : `<small style="color:#333;">NO IMAGE</small>`;
+        
+        if(item.status === "DAMAGED") {
+            damageCount++;
+            damageTable.innerHTML += `
+                <tr style="border-bottom: 1px solid rgba(255,68,68,0.1);">
+                    <td style="padding:15px; color:#fff;">${imgTag} <b style="color:#ff4444;">${item.name}</b> <span class="damage-note">Issue: ${item.lastReport || "No details"}</span></td>
+                    <td style="text-align:right; padding-right:15px;"><button class="btn-fixed" onclick="markAsFixed('${item.id}')">FIXED</button></td>
+                </tr>`;
+        }
+
+        let statusClass = isInStore ? 'status-available' : 'status-inuse';
+        let statusText = isInStore ? 'AVAILABLE' : 'IN USE';
+        if(item.status === "DAMAGED") { statusClass = 'status-damaged'; statusText = 'DAMAGED'; }
+
+        table.innerHTML += `
+            <tr>
+                <td>${imgTag}</td>
+                <td><b style="color:#fff">${item.name}</b></td>
+                <td><small style="color:#888">${item.category}</small></td>
+                <td><span class="location-tag" style="background:rgba(0,210,255,0.1); color:#00d2ff; padding:2px 6px; border-radius:4px;">${item.location}</span></td>
+                <td><span class="${statusClass}">● ${statusText}</span><small style="color:#555; display:block;">${item.job || ""}</small></td>
+                <td><button onclick="if(confirm('Delete?')) db.ref('items/${child.key}').remove()" class="btn-delete">DEL</button></td>
+                <td><button class="btn-qr" onclick="showQR('${child.key}', '${item.name}')">QR</button></td>
+            </tr>`;
+    });
+    damageSection.style.display = damageCount > 0 ? "block" : "none";
+    runFilters();
+});
+
+// --- CORE HELPERS ---
 function previewImage(input) {
     const preview = document.getElementById('photoPreview');
     if (input.files && input.files[0]) {
@@ -162,8 +258,7 @@ function compressImage(file) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = (e) => {
-            const img = new Image();
-            img.src = e.target.result;
+            const img = new Image(); img.src = e.target.result;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const MAX_WIDTH = 800;
@@ -177,28 +272,18 @@ function compressImage(file) {
     });
 }
 
-// --- CORE FUNCTIONS ---
 async function addItem() {
     const name = document.getElementById('invName').value.trim();
     const cat = document.getElementById('invCat').value.trim();
     const loc = document.getElementById('invLoc').value;
     const imgFile = document.getElementById('invImg').files[0];
     const btn = document.getElementById('btnAdd');
-
     if(!name) return alert("Item Name is required!");
     btn.disabled = true; btn.innerText = "PROCESSING...";
-
     let imgBase64 = imgFile ? await compressImage(imgFile) : "";
-    
     const newRef = db.ref("items").push();
-    await newRef.set({ 
-        id: newRef.key, name, category: cat || "General", 
-        location: loc, image: imgBase64, status: "Available", lastUpdate: Date.now(),
-        pm: "-", job: ""
-    });
-
-    alert("Item added successfully!");
-    location.reload();
+    await newRef.set({ id: newRef.key, name, category: cat || "General", location: loc, image: imgBase64, status: "Available", lastUpdate: Date.now(), pm: "-", job: "" });
+    alert("Item added!"); location.reload();
 }
 
 function showQR(id, name) {
@@ -209,92 +294,21 @@ function showQR(id, name) {
 }
 
 async function markAsFixed(itemId) {
-    if(!confirm("Is this item fixed and ready for use?")) return;
-    await db.ref("items/" + itemId).update({
-        status: "Available",
-        location: "STORE",
-        lastReport: null,
-        pm: "Production (Fixed)"
-    });
-    alert("Item status reset to AVAILABLE");
+    if(!confirm("Is this item fixed?")) return;
+    await db.ref("items/" + itemId).update({ status: "Available", location: "MAIN STORE", lastReport: null, pm: "Production (Fixed)" });
 }
 
-// --- REAL-TIME SYNC ---
-db.ref("items").on("value", (snap) => {
-    const table = document.getElementById("inventoryTable");
-    const damageTable = document.getElementById("damageTable");
-    const damageSection = document.getElementById("damageSection");
-    
-    table.innerHTML = "";
-    damageTable.innerHTML = "";
-    let damageCount = 0;
-
-    snap.forEach((child) => {
-        const item = child.val();
-        const isInStore = ["OFFICE", "OFFICE STORE", "STORE"].includes(item.location);
-        const imgTag = item.image ? `<img src="${item.image}" class="item-img" onclick="window.open(this.src)">` : `<small style="color:#333;">NO IMAGE</small>`;
-        
-        // Handle Damaged Items
-        if(item.status === "DAMAGED") {
-            damageCount++;
-            damageTable.innerHTML += `
-                <tr style="border-bottom: 1px solid rgba(255,68,68,0.1);">
-                    <td style="padding:15px; color:#fff;">
-                        ${imgTag} <b style="color:#ff4444;">${item.name}</b>
-                        <span class="damage-note">Issue: ${item.lastReport || "No details"} (Reported by ${item.pm})</span>
-                    </td>
-                    <td style="text-align:right; padding-right:15px;">
-                        <button class="btn-fixed" onclick="markAsFixed('${item.id}')">FIXED & RESET</button>
-                    </td>
-                </tr>`;
-        }
-
-        // Logic display status
-        let statusClass = isInStore ? 'status-available' : 'status-inuse';
-        let statusText = isInStore ? 'AVAILABLE' : 'IN USE';
-        
-        if(item.status === "DAMAGED") {
-            statusClass = 'status-damaged';
-            statusText = 'DAMAGED';
-        }
-
-        const jobTag = (!isInStore && item.job && item.status !== "DAMAGED") ? `<span class="event-tag">📍 ${item.job}</span>` : "";
-        const damageTag = (item.status === "DAMAGED") ? `<span class="damage-note">⚠️ ${item.lastReport || ""}</span>` : "";
-
-        table.innerHTML += `
-            <tr>
-                <td>${imgTag}</td>
-                <td><b style="color:#fff">${item.name}</b></td>
-                <td><small style="color:#888">${item.category}</small></td>
-                <td><span class="location-tag" style="background:rgba(0,210,255,0.1); color:#00d2ff; padding:2px 6px; border-radius:4px;">${item.location}</span></td>
-                <td>
-                    <span class="${statusClass}">● ${statusText}</span>
-                    ${jobTag}
-                    ${damageTag}
-                    <small style="color:#555; display:block;">By: ${item.pm || "-"}</small>
-                </td>
-                <td><button onclick="if(confirm('Delete?')) db.ref('items/${child.key}').remove()" class="btn-delete">DEL</button></td>
-                <td><button class="btn-qr" onclick="showQR('${child.key}', '${item.name}')">QR</button></td>
-            </tr>`;
-    });
-    damageSection.style.display = damageCount > 0 ? "block" : "none";
-});
-
-// SYNC REQUESTS
+// Request Sync
 db.ref("requests").on("value", (snap) => {
     const table = document.getElementById("requestTable");
     const section = document.getElementById("requestSection");
     table.innerHTML = ""; let count = 0;
     snap.forEach((child) => {
         const req = child.val(); count++;
-        const reqImg = req.itemImage ? `<img src="${req.itemImage}" class="item-img" style="margin-right:10px; vertical-align:middle;">` : '';
         table.innerHTML += `
             <tr style="border-bottom: 1px solid rgba(250,204,21,0.1);">
-                <td style="padding:15px; color:#fff;">${reqImg} <b>${req.name}</b> <span style="color:#facc15; margin-left:10px;">by ${req.requestedBy}</span></td>
-                <td style="text-align:right; padding-right:15px;">
-                    <button class="btn-approve" onclick="approveRequest('${child.key}')">APPROVE</button>
-                    <button class="btn-delete" style="margin-left:10px;" onclick="if(confirm('Reject?')) db.ref('requests/${child.key}').remove()">REJECT</button>
-                </td>
+                <td style="padding:15px; color:#fff;"><b>${req.name}</b> by ${req.requestedBy}</td>
+                <td style="text-align:right; padding-right:15px;"><button class="btn-approve" onclick="approveRequest('${child.key}')">APPROVE</button></td>
             </tr>`;
     });
     section.style.display = count > 0 ? "block" : "none";
@@ -304,10 +318,7 @@ async function approveRequest(reqId) {
     db.ref("requests/" + reqId).once("value", async (snap) => {
         const d = snap.val();
         const newRef = db.ref("items").push();
-        await newRef.set({ 
-            id: newRef.key, name: d.name, category: "General", location: "STORE", 
-            image: d.itemImage || "", status: "Available", lastUpdate: Date.now(), pm: "-", job: ""
-        });
+        await newRef.set({ id: newRef.key, name: d.name, category: "General", location: "MAIN STORE", image: d.itemImage || "", status: "Available", lastUpdate: Date.now(), pm: "-", job: "" });
         db.ref("requests/" + reqId).remove();
         alert("Approved!");
     });
