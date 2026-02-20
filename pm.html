@@ -23,11 +23,11 @@
         .btn-remove { color: #ff4444; background: none; border: 1px solid #ff4444; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; }
         .btn-report { color: #facc15; background: none; border: 1px solid #facc15; padding: 4px 8px; border-radius: 5px; font-size: 10px; margin-right: 5px; cursor: pointer; }
         
-        /* Modal Style */
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); padding-top: 60px; }
         .modal-content { background: #111; margin: auto; padding: 20px; border: 1px solid #facc15; width: 85%; border-radius: 15px; }
         
         .scan-success-flash { background: #004466 !important; }
+        .scan-error-flash { background: #660000 !important; }
     </style>
 </head>
 <body>
@@ -45,7 +45,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 20px;">
-        <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold; background: var(--saber-blue); border:none; border-radius:10px;">📷 START SCANNING</button>
+        <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold; background: var(--saber-blue); border:none; border-radius:10px; color:#000;">📷 START SCANNING</button>
         <div id="reader-wrapper">
             <div id="reader"></div>
             <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px; color:#fff;">STOP CAMERA</button>
@@ -70,17 +70,14 @@
     <div class="modal-content">
         <h2 style="color:#facc15; font-size: 16px; margin-top:0;">REPORT DAMAGE</h2>
         <p id="targetItemName" style="font-size:12px; color:#aaa;"></p>
-        
         <label>Severity</label>
         <select id="repSeverity" class="input-dark">
             <option value="MINOR">MINOR (Still usable)</option>
             <option value="MAJOR">MAJOR (Need repair)</option>
             <option value="TOTAL LOSS">TOTAL LOSS / BROKEN</option>
         </select>
-        
         <label>Issue Description</label>
         <textarea id="repDesc" class="input-dark" rows="3" placeholder="Explain what happened..."></textarea>
-        
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button onclick="closeReport()" style="flex:1; padding:10px; background:#222; color:#fff; border:1px solid #444; border-radius:8px;">CANCEL</button>
             <button onclick="submitDamageReport()" style="flex:1; padding:10px; background:#ff4444; color:#fff; border:none; border-radius:8px; font-weight:bold;">SUBMIT REPORT</button>
@@ -117,30 +114,49 @@ let basket = [];
 let isProcessing = false;
 let activeReportId = null;
 
-function playSystemBeep() {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.type = 'square'; 
-        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-        gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
-        oscillator.start(); oscillator.stop(audioCtx.currentTime + 0.1);
-    } catch(e) { console.log(e); }
+// --- SOUND EFFECTS ---
+function playSuccessSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+}
+
+function playErrorSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const playBuzzer = (startTime) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, startTime);
+        gain.gain.setValueAtTime(0.2, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+        osc.start(startTime); osc.stop(startTime + 0.3);
+    };
+    playBuzzer(audioCtx.currentTime);
+    playBuzzer(audioCtx.currentTime + 0.4);
 }
 
 window.onload = () => {
     if(localStorage.getItem('pmName')) document.getElementById('pmName').value = localStorage.getItem('pmName');
 };
 
-function triggerFeedback() {
-    playSystemBeep();
-    if(window.navigator.vibrate) window.navigator.vibrate(100);
-    document.body.classList.add('scan-success-flash');
-    setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
+function triggerFeedback(type) {
+    if(type === 'success') {
+        playSuccessSound();
+        if(window.navigator.vibrate) window.navigator.vibrate(100);
+        document.body.classList.add('scan-success-flash');
+        setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
+    } else {
+        playErrorSound();
+        if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+        document.body.classList.add('scan-error-flash');
+        setTimeout(() => { document.body.classList.remove('scan-error-flash'); }, 300);
+    }
 }
 
 async function toggleScanner(start) {
@@ -169,9 +185,16 @@ function handleScannedCode(id) {
     db.ref("items/" + id).once("value", (snap) => {
         const data = snap.val();
         if(data) {
-            triggerFeedback();
+            if(data.status === "DAMAGED") {
+                triggerFeedback('error');
+                alert(`🚫 DILARANG AMBIL!\n\nItem: ${data.name}\nStatus: ROSAK / MAINTENANCE\nIssue: ${data.lastReport || "N/A"}`);
+                return;
+            }
+            triggerFeedback('success');
             basket.push({ id: id, name: data.name });
             renderList();
+        } else {
+            alert("Barang tiada dalam sistem!");
         }
     });
 }
@@ -198,7 +221,6 @@ function renderList() {
 
 function remove(index) { basket.splice(index, 1); renderList(); }
 
-// FUNGSI REPORT KEROSAKAN
 function openReport(id, name) {
     activeReportId = id;
     document.getElementById('targetItemName').innerText = "Item: " + name + " (" + id + ")";
@@ -214,31 +236,19 @@ async function submitDamageReport() {
     const desc = document.getElementById('repDesc').value.trim();
     const severity = document.getElementById('repSeverity').value;
     const pm = document.getElementById('pmName').value;
-    
     if(!desc) return alert("Please describe the issue!");
-
     const now = Date.now();
     const updates = {};
-    
-    // 1. Update status barang dalam database
     updates[`items/${activeReportId}/status`] = "DAMAGED";
     updates[`items/${activeReportId}/lastReport`] = desc;
     updates[`items/${activeReportId}/pm`] = pm;
-    
-    // 2. Simpan sejarah dalam logs
     const logKey = db.ref("logs").push().key;
     updates[`logs/${logKey}`] = {
-        itemId: activeReportId,
-        location: "REPORTED DAMAGED",
-        pmName: pm,
-        notes: `[${severity}] ${desc}`,
-        timestamp: now
+        itemId: activeReportId, location: "REPORTED DAMAGED", pmName: pm, notes: `[${severity}] ${desc}`, timestamp: now
     };
-
     try {
         await db.ref().update(updates);
         alert("Report Sent! Asset status changed to DAMAGED.");
-        // Buang dari basket sebab dah hantar report
         basket = basket.filter(item => item.id !== activeReportId);
         renderList();
         closeReport();
@@ -249,30 +259,24 @@ async function confirmAndSubmit() {
     const pm = document.getElementById('pmName').value.trim();
     const job = document.getElementById('jobName').value.trim();
     const loc = document.getElementById('destLoc').value;
-    
     if(!pm || !job) return alert("Fill in Name and Event Name!");
     if(basket.length === 0) return;
     if(!confirm(`Submit ${basket.length} items to ${loc}?`)) return;
-
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.innerText = "UPDATING...";
     const now = Date.now();
     const updates = {};
-
     basket.forEach(item => {
         updates[`items/${item.id}/location`] = loc;
         updates[`items/${item.id}/pm`] = pm;
         updates[`items/${item.id}/job`] = job;
         updates[`items/${item.id}/status`] = loc === "STORE" ? "AVAILABLE" : "IN USE";
         updates[`items/${item.id}/lastUpdate`] = now;
-        
         const logKey = db.ref("logs").push().key;
         updates[`logs/${logKey}`] = {
-            itemId: item.id, itemName: item.name, location: loc,
-            pmName: pm, notes: "Job: " + job, timestamp: now
+            itemId: item.id, itemName: item.name, location: loc, pmName: pm, notes: "Job: " + job, timestamp: now
         };
     });
-
     try {
         await db.ref().update(updates);
         alert("Success!");
