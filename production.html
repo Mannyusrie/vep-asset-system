@@ -30,15 +30,22 @@
         }
         .btn-delete:hover { background: #ff4444; color: #fff; box-shadow: 0 0 10px #ff4444; }
         
-        #requestSection { border: 2px solid #facc15; box-shadow: 0 0 15px rgba(250, 204, 21, 0.2); margin-bottom: 25px; }
+        /* New Styles for Damage & Request */
+        #requestSection, #damageSection { margin-bottom: 25px; border-radius: 15px; overflow: hidden; }
+        #requestSection { border: 2px solid #facc15; box-shadow: 0 0 15px rgba(250, 204, 21, 0.1); }
+        #damageSection { border: 2px solid #ff4444; box-shadow: 0 0 15px rgba(255, 68, 68, 0.1); }
+        
         .btn-approve { background: #facc15; color: #000; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .btn-fixed { background: #4ade80; color: #000; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         
         #qrModal canvas { background: #fff; padding: 10px; border-radius: 10px; box-shadow: var(--saber-intense); }
         .status-available { color: #4ade80; font-weight: bold; }
         .status-inuse { color: var(--saber-blue); font-weight: bold; }
+        .status-damaged { color: #ff4444; font-weight: bold; animation: blink 1s infinite; }
         
-        /* Tag untuk Event Name */
+        @keyframes blink { 50% { opacity: 0.5; } }
         .event-tag { color: #facc15; font-size: 11px; font-weight: bold; display: block; margin-top: 4px; }
+        .damage-note { color: #ffaaaa; font-size: 10px; font-style: italic; display: block; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -52,6 +59,15 @@
 </header>
 
 <div class="container">
+    <div id="damageSection" class="card" style="display:none;">
+        <h2 style="color: #ff4444; border-bottom-color: #ff4444;">⚠️ MAINTENANCE & DAMAGE REPORTS</h2>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%;">
+                <tbody id="damageTable"></tbody>
+            </table>
+        </div>
+    </div>
+
     <div id="requestSection" class="card" style="display:none;">
         <h2 style="color: #facc15; border-bottom-color: #facc15;">⚠️ INCOMING REQUESTS</h2>
         <div style="overflow-x: auto;">
@@ -131,6 +147,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// --- IMAGE HELPERS ---
 function previewImage(input) {
     const preview = document.getElementById('photoPreview');
     if (input.files && input.files[0]) {
@@ -160,6 +177,7 @@ function compressImage(file) {
     });
 }
 
+// --- CORE FUNCTIONS ---
 async function addItem() {
     const name = document.getElementById('invName').value.trim();
     const cat = document.getElementById('invCat').value.trim();
@@ -176,7 +194,7 @@ async function addItem() {
     await newRef.set({ 
         id: newRef.key, name, category: cat || "General", 
         location: loc, image: imgBase64, status: "Available", lastUpdate: Date.now(),
-        pm: "-", job: "" // Initialize fields
+        pm: "-", job: ""
     });
 
     alert("Item added successfully!");
@@ -190,18 +208,58 @@ function showQR(id, name) {
     QRCode.toCanvas(canvas, id, { width: 280, margin: 2 }, (err) => { if(!err) modal.style.display='flex'; });
 }
 
-// REAL-TIME SYNC
+async function markAsFixed(itemId) {
+    if(!confirm("Is this item fixed and ready for use?")) return;
+    await db.ref("items/" + itemId).update({
+        status: "Available",
+        location: "STORE",
+        lastReport: null,
+        pm: "Production (Fixed)"
+    });
+    alert("Item status reset to AVAILABLE");
+}
+
+// --- REAL-TIME SYNC ---
 db.ref("items").on("value", (snap) => {
     const table = document.getElementById("inventoryTable");
+    const damageTable = document.getElementById("damageTable");
+    const damageSection = document.getElementById("damageSection");
+    
     table.innerHTML = "";
+    damageTable.innerHTML = "";
+    let damageCount = 0;
+
     snap.forEach((child) => {
         const item = child.val();
         const isInStore = ["OFFICE", "OFFICE STORE", "STORE"].includes(item.location);
         const imgTag = item.image ? `<img src="${item.image}" class="item-img" onclick="window.open(this.src)">` : `<small style="color:#333;">NO IMAGE</small>`;
         
-        // Logic detail event & PM
-        const jobTag = (!isInStore && item.job) ? `<span class="event-tag">📍 ${item.job}</span>` : "";
-        const pmLabel = item.pm ? `<small style="color:#555">Last by: ${item.pm}</small>` : "";
+        // Handle Damaged Items
+        if(item.status === "DAMAGED") {
+            damageCount++;
+            damageTable.innerHTML += `
+                <tr style="border-bottom: 1px solid rgba(255,68,68,0.1);">
+                    <td style="padding:15px; color:#fff;">
+                        ${imgTag} <b style="color:#ff4444;">${item.name}</b>
+                        <span class="damage-note">Issue: ${item.lastReport || "No details"} (Reported by ${item.pm})</span>
+                    </td>
+                    <td style="text-align:right; padding-right:15px;">
+                        <button class="btn-fixed" onclick="markAsFixed('${item.id}')">FIXED & RESET</button>
+                    </td>
+                </tr>`;
+        }
+
+        // Logic display status
+        let statusClass = isInStore ? 'status-available' : 'status-inuse';
+        let statusText = isInStore ? 'AVAILABLE' : 'IN USE';
+        
+        if(item.status === "DAMAGED") {
+            statusClass = 'status-damaged';
+            statusText = 'DAMAGED';
+        }
+
+        const jobTag = (!isInStore && item.job && item.status !== "DAMAGED") ? `<span class="event-tag">📍 ${item.job}</span>` : "";
+        const damageTag = (item.status === "DAMAGED") ? `<span class="damage-note">⚠️ ${item.lastReport || ""}</span>` : "";
 
         table.innerHTML += `
             <tr>
@@ -210,36 +268,32 @@ db.ref("items").on("value", (snap) => {
                 <td><small style="color:#888">${item.category}</small></td>
                 <td><span class="location-tag" style="background:rgba(0,210,255,0.1); color:#00d2ff; padding:2px 6px; border-radius:4px;">${item.location}</span></td>
                 <td>
-                    <span class="${isInStore ? 'status-available' : 'status-inuse'}">● ${isInStore ? 'AVAILABLE' : 'IN USE'}</span>
+                    <span class="${statusClass}">● ${statusText}</span>
                     ${jobTag}
-                    ${pmLabel}
+                    ${damageTag}
+                    <small style="color:#555; display:block;">By: ${item.pm || "-"}</small>
                 </td>
-                <td><button onclick="if(confirm('Are you sure you want to delete this item?')) db.ref('items/${child.key}').remove()" class="btn-delete">DEL</button></td>
+                <td><button onclick="if(confirm('Delete?')) db.ref('items/${child.key}').remove()" class="btn-delete">DEL</button></td>
                 <td><button class="btn-qr" onclick="showQR('${child.key}', '${item.name}')">QR</button></td>
             </tr>`;
     });
+    damageSection.style.display = damageCount > 0 ? "block" : "none";
 });
 
+// SYNC REQUESTS
 db.ref("requests").on("value", (snap) => {
     const table = document.getElementById("requestTable");
     const section = document.getElementById("requestSection");
-    table.innerHTML = ""; 
-    let count = 0;
-
+    table.innerHTML = ""; let count = 0;
     snap.forEach((child) => {
-        const req = child.val(); 
-        count++;
+        const req = child.val(); count++;
         const reqImg = req.itemImage ? `<img src="${req.itemImage}" class="item-img" style="margin-right:10px; vertical-align:middle;">` : '';
-        
         table.innerHTML += `
             <tr style="border-bottom: 1px solid rgba(250,204,21,0.1);">
-                <td style="padding:15px; color:#fff;">
-                    ${reqImg}
-                    <b>${req.name}</b> <span style="color:#facc15; margin-left:10px;">requested by ${req.requestedBy}</span>
-                </td>
+                <td style="padding:15px; color:#fff;">${reqImg} <b>${req.name}</b> <span style="color:#facc15; margin-left:10px;">by ${req.requestedBy}</span></td>
                 <td style="text-align:right; padding-right:15px;">
-                    <button class="btn-approve" onclick="approveRequest('${child.key}')">APPROVE & ADD</button>
-                    <button class="btn-delete" style="margin-left:10px;" onclick="if(confirm('Are you sure you want to reject this request?')) db.ref('requests/${child.key}').remove()">REJECT</button>
+                    <button class="btn-approve" onclick="approveRequest('${child.key}')">APPROVE</button>
+                    <button class="btn-delete" style="margin-left:10px;" onclick="if(confirm('Reject?')) db.ref('requests/${child.key}').remove()">REJECT</button>
                 </td>
             </tr>`;
     });
@@ -250,21 +304,12 @@ async function approveRequest(reqId) {
     db.ref("requests/" + reqId).once("value", async (snap) => {
         const d = snap.val();
         const newRef = db.ref("items").push();
-        
         await newRef.set({ 
-            id: newRef.key, 
-            name: d.name, 
-            category: "General", 
-            location: "STORE", 
-            image: d.itemImage || "", 
-            status: "Available", 
-            lastUpdate: Date.now(),
-            pm: "-",
-            job: ""
+            id: newRef.key, name: d.name, category: "General", location: "STORE", 
+            image: d.itemImage || "", status: "Available", lastUpdate: Date.now(), pm: "-", job: ""
         });
-
         db.ref("requests/" + reqId).remove();
-        alert("Request Approved! Item added to Cloud Inventory.");
+        alert("Approved!");
     });
 }
 </script>

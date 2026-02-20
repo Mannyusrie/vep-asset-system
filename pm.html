@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
     <style>
-        body { background: #000; color: #fff; padding-bottom: 150px; transition: background 0.1s; }
+        body { background: #000; color: #fff; padding-bottom: 150px; transition: background 0.1s; font-family: sans-serif; }
         .container { padding: 15px; }
         #reader-wrapper { display: none; border: 2px solid var(--saber-blue); border-radius: 20px; overflow: hidden; margin: 15px 0; }
         .scan-list-card { background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 15px; padding: 15px; margin-top: 20px; }
@@ -16,11 +16,17 @@
         .item-info b { color: var(--saber-blue); font-size: 14px; display: block; }
         .item-info small { color: #555; font-size: 10px; }
         .footer-submit { position: fixed; bottom: 0; left: 0; width: 100%; background: #050505; border-top: 1px solid var(--saber-blue); padding: 20px; box-sizing: border-box; z-index: 1000; }
-        .request-card { border: 1px solid #facc15 !important; margin-top: 30px; background: rgba(250, 204, 21, 0.05); }
+        .request-card { border: 1px solid #facc15 !important; margin-top: 30px; background: rgba(250, 204, 21, 0.05); padding: 15px; border-radius: 15px; }
         .request-card h2 { color: #facc15 !important; font-size: 14px; margin-top: 0; }
         label { color: var(--saber-blue); font-size: 11px; margin-top: 10px; display: block; text-transform: uppercase; }
         .input-dark { background: #111; border: 1px solid #222; color: #fff; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-top: 5px; }
-        .btn-remove { color: #ff4444; background: none; border: 1px solid #ff4444; padding: 4px 8px; border-radius: 5px; font-size: 10px; }
+        .btn-remove { color: #ff4444; background: none; border: 1px solid #ff4444; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; }
+        .btn-report { color: #facc15; background: none; border: 1px solid #facc15; padding: 4px 8px; border-radius: 5px; font-size: 10px; margin-right: 5px; cursor: pointer; }
+        
+        /* Modal Style */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); padding-top: 60px; }
+        .modal-content { background: #111; margin: auto; padding: 20px; border: 1px solid #facc15; width: 85%; border-radius: 15px; }
+        
         .scan-success-flash { background: #004466 !important; }
     </style>
 </head>
@@ -39,10 +45,10 @@
     </div>
 
     <div style="text-align: center; margin-top: 20px;">
-        <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold;">📷 START SCANNING</button>
+        <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold; background: var(--saber-blue); border:none; border-radius:10px;">📷 START SCANNING</button>
         <div id="reader-wrapper">
             <div id="reader"></div>
-            <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px;">STOP CAMERA</button>
+            <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px; color:#fff;">STOP CAMERA</button>
         </div>
     </div>
 
@@ -56,7 +62,29 @@
         <input id="reqItem" placeholder="Item Name" class="input-dark">
         <label style="color:#facc15;">PHOTO (OPTIONAL)</label>
         <input type="file" id="reqPhoto" accept="image/*" capture="environment" style="margin-top:5px;">
-        <button id="btnRequest" onclick="sendRequest()" style="border-color: #facc15; color: #facc15; margin-top: 15px; width: 100%;">SEND REQUEST</button>
+        <button id="btnRequest" onclick="sendRequest()" style="border: 1px solid #facc15; background:none; color: #facc15; margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px;">SEND REQUEST</button>
+    </div>
+</div>
+
+<div id="reportModal" class="modal">
+    <div class="modal-content">
+        <h2 style="color:#facc15; font-size: 16px; margin-top:0;">REPORT DAMAGE</h2>
+        <p id="targetItemName" style="font-size:12px; color:#aaa;"></p>
+        
+        <label>Severity</label>
+        <select id="repSeverity" class="input-dark">
+            <option value="MINOR">MINOR (Still usable)</option>
+            <option value="MAJOR">MAJOR (Need repair)</option>
+            <option value="TOTAL LOSS">TOTAL LOSS / BROKEN</option>
+        </select>
+        
+        <label>Issue Description</label>
+        <textarea id="repDesc" class="input-dark" rows="3" placeholder="Explain what happened..."></textarea>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button onclick="closeReport()" style="flex:1; padding:10px; background:#222; color:#fff; border:1px solid #444; border-radius:8px;">CANCEL</button>
+            <button onclick="submitDamageReport()" style="flex:1; padding:10px; background:#ff4444; color:#fff; border:none; border-radius:8px; font-weight:bold;">SUBMIT REPORT</button>
+        </div>
     </div>
 </div>
 
@@ -67,7 +95,7 @@
         <option value="OFFICE">OFFICE</option>
         <option value="STORE">MAIN STORE</option>
     </select>
-    <button id="submitBtn" onclick="confirmAndSubmit()" style="width:100%; background: var(--saber-blue); color: #000; font-weight: bold; padding: 15px;">STAMP ALL ASSETS</button>
+    <button id="submitBtn" onclick="confirmAndSubmit()" style="width:100%; background: var(--saber-blue); color: #000; font-weight: bold; padding: 15px; border:none; border-radius:10px;">STAMP ALL ASSETS</button>
 </div>
 
 <script>
@@ -87,6 +115,7 @@ const db = firebase.database();
 let scanner;
 let basket = [];
 let isProcessing = false;
+let activeReportId = null;
 
 function playSystemBeep() {
     try {
@@ -99,8 +128,7 @@ function playSystemBeep() {
         oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
         gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
-        oscillator.start();
-        oscillator.stop(audioCtx.currentTime + 0.1);
+        oscillator.start(); oscillator.stop(audioCtx.currentTime + 0.1);
     } catch(e) { console.log(e); }
 }
 
@@ -157,7 +185,10 @@ function renderList() {
         listDiv.innerHTML += `
             <div class="scan-item">
                 <div class="item-info"><b>${item.name}</b><small>${item.id}</small></div>
-                <button class="btn-remove" onclick="remove(${index})">REMOVE</button>
+                <div>
+                    <button class="btn-report" onclick="openReport('${item.id}', '${item.name}')">REPORT</button>
+                    <button class="btn-remove" onclick="remove(${index})">REMOVE</button>
+                </div>
             </div>`;
     });
     document.getElementById('count').innerText = basket.length;
@@ -166,6 +197,53 @@ function renderList() {
 }
 
 function remove(index) { basket.splice(index, 1); renderList(); }
+
+// FUNGSI REPORT KEROSAKAN
+function openReport(id, name) {
+    activeReportId = id;
+    document.getElementById('targetItemName').innerText = "Item: " + name + " (" + id + ")";
+    document.getElementById('reportModal').style.display = 'block';
+}
+
+function closeReport() {
+    document.getElementById('reportModal').style.display = 'none';
+    activeReportId = null;
+}
+
+async function submitDamageReport() {
+    const desc = document.getElementById('repDesc').value.trim();
+    const severity = document.getElementById('repSeverity').value;
+    const pm = document.getElementById('pmName').value;
+    
+    if(!desc) return alert("Please describe the issue!");
+
+    const now = Date.now();
+    const updates = {};
+    
+    // 1. Update status barang dalam database
+    updates[`items/${activeReportId}/status`] = "DAMAGED";
+    updates[`items/${activeReportId}/lastReport`] = desc;
+    updates[`items/${activeReportId}/pm`] = pm;
+    
+    // 2. Simpan sejarah dalam logs
+    const logKey = db.ref("logs").push().key;
+    updates[`logs/${logKey}`] = {
+        itemId: activeReportId,
+        location: "REPORTED DAMAGED",
+        pmName: pm,
+        notes: `[${severity}] ${desc}`,
+        timestamp: now
+    };
+
+    try {
+        await db.ref().update(updates);
+        alert("Report Sent! Asset status changed to DAMAGED.");
+        // Buang dari basket sebab dah hantar report
+        basket = basket.filter(item => item.id !== activeReportId);
+        renderList();
+        closeReport();
+    } catch(e) { alert("Error!"); }
+}
 
 async function confirmAndSubmit() {
     const pm = document.getElementById('pmName').value.trim();
@@ -182,13 +260,12 @@ async function confirmAndSubmit() {
     const updates = {};
 
     basket.forEach(item => {
-        // Sync ke item data supaya Production nampak
         updates[`items/${item.id}/location`] = loc;
         updates[`items/${item.id}/pm`] = pm;
         updates[`items/${item.id}/job`] = job;
+        updates[`items/${item.id}/status`] = loc === "STORE" ? "AVAILABLE" : "IN USE";
         updates[`items/${item.id}/lastUpdate`] = now;
         
-        // Simpan dalam logs
         const logKey = db.ref("logs").push().key;
         updates[`logs/${logKey}`] = {
             itemId: item.id, itemName: item.name, location: loc,
