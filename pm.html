@@ -48,7 +48,7 @@
         <button id="startBtn" onclick="toggleScanner(true)" style="width: 100%; padding: 15px; font-weight: bold; background: var(--saber-blue); border:none; border-radius:10px; color:#000;">📷 START SCANNING</button>
         <div id="reader-wrapper">
             <div id="reader"></div>
-            <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px; color:#fff;">STOP CAMERA</button>
+            <button onclick="toggleScanner(false)" style="background: #ff4444; border: none; width: 100%; padding: 10px; color:#fff;">CANCEL</button>
         </div>
     </div>
 
@@ -77,7 +77,7 @@
             <option value="TOTAL LOSS">TOTAL LOSS / BROKEN</option>
         </select>
         <label>Issue Description</label>
-        <textarea id="repDesc" class="input-dark" rows="3" placeholder="Explain what happened..."></textarea>
+        <textarea id="repDesc" class="input-dark" rows="3" placeholder="Describe the issue..."></textarea>
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button onclick="closeReport()" style="flex:1; padding:10px; background:#222; color:#fff; border:1px solid #444; border-radius:8px;">CANCEL</button>
             <button onclick="submitDamageReport()" style="flex:1; padding:10px; background:#ff4444; color:#fff; border:none; border-radius:8px; font-weight:bold;">SUBMIT REPORT</button>
@@ -111,7 +111,6 @@ const db = firebase.database();
 
 let scanner;
 let basket = [];
-let isProcessing = false;
 let activeReportId = null;
 
 // --- SOUND EFFECTS ---
@@ -166,35 +165,36 @@ async function toggleScanner(start) {
         document.getElementById('startBtn').style.display = 'none';
         document.getElementById('reader-wrapper').style.display = 'block';
         if(!scanner) scanner = new Html5Qrcode("reader");
-        scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (text) => {
-            if(!isProcessing) {
-                isProcessing = true;
-                handleScannedCode(text);
-                setTimeout(() => { isProcessing = false; }, 1000); 
-            }
+        scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, async (text) => {
+            // AUTO STOP CAMERA IMMEDIATELY AFTER SCAN
+            await toggleScanner(false);
+            handleScannedCode(text);
         });
     } else {
-        if(scanner) await scanner.stop();
+        if(scanner && scanner.isScanning) await scanner.stop();
         document.getElementById('reader-wrapper').style.display = 'none';
         document.getElementById('startBtn').style.display = 'block';
     }
 }
 
 function handleScannedCode(id) {
-    if(basket.find(x => x.id === id)) return;
+    if(basket.find(x => x.id === id)) {
+        alert("This item is already in your cart.");
+        return;
+    }
     db.ref("items/" + id).once("value", (snap) => {
         const data = snap.val();
         if(data) {
             if(data.status === "DAMAGED") {
                 triggerFeedback('error');
-                alert(`🚫 DILARANG AMBIL!\n\nItem: ${data.name}\nStatus: ROSAK / MAINTENANCE\nIssue: ${data.lastReport || "N/A"}`);
+                alert(`🚫 ACCESS DENIED!\n\nItem: ${data.name}\nStatus: DAMAGED / MAINTENANCE\nIssue: ${data.lastReport || "Not specified"}\n\nPlease return this item to the store!`);
                 return;
             }
             triggerFeedback('success');
             basket.push({ id: id, name: data.name });
             renderList();
         } else {
-            alert("Barang tiada dalam sistem!");
+            alert("Item not found in database!");
         }
     });
 }
@@ -248,18 +248,18 @@ async function submitDamageReport() {
     };
     try {
         await db.ref().update(updates);
-        alert("Report Sent! Asset status changed to DAMAGED.");
+        alert("Report Submitted! Item status changed to DAMAGED.");
         basket = basket.filter(item => item.id !== activeReportId);
         renderList();
         closeReport();
-    } catch(e) { alert("Error!"); }
+    } catch(e) { alert("Error updating database!"); }
 }
 
 async function confirmAndSubmit() {
     const pm = document.getElementById('pmName').value.trim();
     const job = document.getElementById('jobName').value.trim();
     const loc = document.getElementById('destLoc').value;
-    if(!pm || !job) return alert("Fill in Name and Event Name!");
+    if(!pm || !job) return alert("Please fill in your Name and Job Name!");
     if(basket.length === 0) return;
     if(!confirm(`Submit ${basket.length} items to ${loc}?`)) return;
     const btn = document.getElementById('submitBtn');
@@ -279,7 +279,7 @@ async function confirmAndSubmit() {
     });
     try {
         await db.ref().update(updates);
-        alert("Success!");
+        alert("Success! Assets stamped.");
         location.reload();
     } catch(e) { alert("Error!"); btn.disabled = false; }
 }
@@ -302,7 +302,7 @@ async function sendRequest() {
     db.ref("requests").push({
         name: item, requestedBy: pm, itemImage: imgBase64, timestamp: Date.now()
     }).then(() => {
-        alert("Request sent!");
+        alert("Request Sent!");
         document.getElementById('reqItem').value = "";
         btn.disabled = false; btn.innerText = "SEND REQUEST";
     });
