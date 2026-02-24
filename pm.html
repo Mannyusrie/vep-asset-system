@@ -98,16 +98,18 @@
         <h2>REQUEST NEW ASSET</h2>
         <input id="reqItem" placeholder="Item Name" class="input-dark">
         
-        <label style="color:#facc15;">CATEGORY</label>
-        <select id="reqCategory" class="input-dark">
-            <option value="General">General</option>
-            <option value="Electronics">Electronics</option>
-            <option value="FOH">FOH</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Lighting">Lighting</option>
-            <option value="Audio">Audio</option>
-            <option value="Visual">Visual</option>
-        </select>
+        <label style="color:#facc15;">CATEGORY (SEARCH OR TYPE NEW)</label>
+        <input list="categoryOptions" id="reqCategory" placeholder="Search or type category..." class="input-dark">
+        <datalist id="categoryOptions">
+            <option value="Audio">
+            <option value="Visual">
+            <option value="Lighting">
+            <option value="Electronics">
+            <option value="FOH">
+            <option value="Accessories">
+            <option value="Stage">
+            <option value="Power">
+        </datalist>
 
         <label style="color:#facc15;">PHOTO (OPTIONAL)</label>
         <input type="file" id="reqPhoto" accept="image/*" capture="environment" style="margin-top:5px;">
@@ -305,11 +307,10 @@ async function confirmAndSubmit() {
     } catch(e) { alert("Error!"); btn.disabled = false; }
 }
 
-// UPDATE: Function hantar request dengan Category
 async function sendRequest() {
     const pm = document.getElementById('pmName').value;
     const item = document.getElementById('reqItem').value;
-    const category = document.getElementById('reqCategory').value; // Ambil nilai category
+    const category = document.getElementById('reqCategory').value || "General"; 
     const file = document.getElementById('reqPhoto').files[0];
 
     if(!pm || !item) return alert("Name and Item required!");
@@ -325,7 +326,7 @@ async function sendRequest() {
 
     db.ref("requests").push({ 
         name: item, 
-        category: category, // Hantar category sekali
+        category: category, 
         requestedBy: pm, 
         itemImage: imgBase64, 
         timestamp: Date.now() 
