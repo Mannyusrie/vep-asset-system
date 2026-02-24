@@ -46,7 +46,7 @@
 </head>
 <body>
 
-<audio id="beepSound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
+<audio id="beepSound" src="https://raw.githubusercontent.com/rafael-is-not-available/scanner-beep/main/beep.mp3" preload="auto"></audio>
 <audio id="errorSound" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
 
 <header style="padding: 15px; text-align: center; border-bottom: 1px solid rgba(0,210,255,0.1);">
@@ -197,6 +197,11 @@ async function toggleScanner(start) {
         if(!pm) return alert("Please enter your name first!");
         document.getElementById('startBtn').style.display = 'none';
         document.getElementById('reader-wrapper').style.display = 'block';
+        
+        // Unlock audio for browser
+        const beep = document.getElementById('beepSound');
+        beep.play().then(() => { beep.pause(); beep.currentTime = 0; }).catch(() => {});
+
         if(!scanner) scanner = new Html5Qrcode("reader");
         scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, async (text) => {
             await toggleScanner(false);
@@ -325,17 +330,25 @@ async function sendRequest() {
 function triggerFeedback(type) {
     const beep = document.getElementById('beepSound');
     const errorBeep = document.getElementById('errorSound');
+    
+    // Maximize volume
+    beep.volume = 1.0;
+    errorBeep.volume = 1.0;
 
     if(type === 'success') {
         beep.currentTime = 0;
+        // Make it high pitch
+        beep.playbackRate = 1.3; 
         beep.play().catch(e => console.log("Audio blocked"));
-        if(window.navigator.vibrate) window.navigator.vibrate(100);
+        
+        if(window.navigator.vibrate) window.navigator.vibrate(150);
         document.body.classList.add('scan-success-flash');
         setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
     } else {
         errorBeep.currentTime = 0;
         errorBeep.play().catch(e => console.log("Audio blocked"));
-        if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+        
+        if(window.navigator.vibrate) window.navigator.vibrate([300, 100, 300]);
         document.body.classList.add('scan-error-flash');
         setTimeout(() => { document.body.classList.remove('scan-error-flash'); }, 300);
     }
