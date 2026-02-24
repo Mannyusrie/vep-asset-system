@@ -46,9 +46,6 @@
 </head>
 <body>
 
-<audio id="beepSound" src="https://raw.githubusercontent.com/rafael-is-not-available/scanner-beep/main/beep.mp3" preload="auto"></audio>
-<audio id="errorSound" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
-
 <header style="padding: 15px; text-align: center; border-bottom: 1px solid rgba(0,210,255,0.1);">
     <h1 style="font-size: 14px; letter-spacing: 2px; color: var(--saber-blue);">V.E.P | ASSET TRACKER</h1>
 </header>
@@ -78,11 +75,9 @@
         <h2 style="color: var(--saber-blue); font-size: 14px; margin-bottom: 15px; display: flex; align-items: center;">
             <span style="margin-right: 10px;">📡</span> LIVE CLOUD INVENTORY
         </h2>
-        
         <div class="search-box">
             <input type="text" id="searchInput" class="input-dark" placeholder="Search asset name or ID..." onkeyup="filterInventory()">
         </div>
-
         <div class="table-wrapper">
             <table class="monitor-table">
                 <thead>
@@ -114,14 +109,14 @@
         <p id="targetItemName" style="font-size:12px; color:#aaa;"></p>
         <label>Severity</label>
         <select id="repSeverity" class="input-dark">
-            <option value="MINOR">MINOR (Still usable)</option>
-            <option value="MAJOR">MAJOR (Need repair)</option>
-            <option value="TOTAL LOSS">TOTAL LOSS / BROKEN</option>
+            <option value="MINOR">MINOR</option>
+            <option value="MAJOR">MAJOR</option>
+            <option value="TOTAL LOSS">TOTAL LOSS</option>
         </select>
         <label>Issue Description</label>
         <textarea id="repDesc" class="input-dark" rows="3" placeholder="Describe the issue..."></textarea>
         <div style="display:flex; gap:10px; margin-top:20px;">
-            <button onclick="closeReport()" style="flex:1; padding:10px; background:#222; color:#fff; border:1px solid #444; border-radius:8px;">CANCEL</button>
+            <button onclick="closeReport()" style="flex:1; padding:10px; background:#222; border:1px solid #444; color:#fff; border-radius:8px;">CANCEL</button>
             <button onclick="submitDamageReport()" style="flex:1; padding:10px; background:#ff4444; color:#fff; border:none; border-radius:8px; font-weight:bold;">SUBMIT REPORT</button>
         </div>
     </div>
@@ -138,6 +133,7 @@
 </div>
 
 <script>
+// --- FIREBASE CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
     authDomain: "vep-inventory.firebaseapp.com",
@@ -154,6 +150,12 @@ let scanner;
 let basket = [];
 let activeReportId = null;
 
+// Audio Context Setup
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
 function startInventoryMonitor() {
     const inventoryBody = document.getElementById('inventoryBody');
     db.ref("items").on("value", (snapshot) => {
@@ -165,14 +167,7 @@ function startInventoryMonitor() {
             if(item.status === "In Use") statusClass = "status-inuse";
             if(item.status === "DAMAGED") statusClass = "status-damaged";
             const timeStr = item.lastUpdate ? new Date(item.lastUpdate).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : "-";
-            inventoryBody.innerHTML += `
-                <tr>
-                    <td><b style="color:#fff">${item.name}</b><br><small style="color:#555">${id}</small></td>
-                    <td><span class="status-pill ${statusClass}">${(item.status || 'Unknown').toUpperCase()}</span></td>
-                    <td><span style="color:#aaa">${item.location || "N/A"}</span><br><small style="color:#444">${item.job || ""}</small></td>
-                    <td><small style="color:var(--saber-blue)">${item.pm || "-"}</small></td>
-                    <td><small style="color:#333">${timeStr}</small></td>
-                </tr>`;
+            inventoryBody.innerHTML += `<tr><td><b style="color:#fff">${item.name}</b><br><small style="color:#555">${id}</small></td><td><span class="status-pill ${statusClass}">${(item.status || 'Unknown').toUpperCase()}</span></td><td><span style="color:#aaa">${item.location || "N/A"}</span><br><small style="color:#444">${item.job || ""}</small></td><td><small style="color:var(--saber-blue)">${item.pm || "-"}</small></td><td><small style="color:#333">${timeStr}</small></td></tr>`;
         });
     });
 }
@@ -193,15 +188,11 @@ window.onload = () => {
 
 async function toggleScanner(start) {
     if(start) {
+        initAudio(); // Activate audio on user click
         const pm = document.getElementById('pmName').value;
         if(!pm) return alert("Please enter your name first!");
         document.getElementById('startBtn').style.display = 'none';
         document.getElementById('reader-wrapper').style.display = 'block';
-        
-        // Unlock audio for browser
-        const beep = document.getElementById('beepSound');
-        beep.play().then(() => { beep.pause(); beep.currentTime = 0; }).catch(() => {});
-
         if(!scanner) scanner = new Html5Qrcode("reader");
         scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, async (text) => {
             await toggleScanner(false);
@@ -241,14 +232,7 @@ function renderList() {
     const listDiv = document.getElementById('itemList');
     listDiv.innerHTML = "";
     basket.forEach((item, index) => {
-        listDiv.innerHTML += `
-            <div class="scan-item">
-                <div class="item-info"><b>${item.name}</b><small>${item.id}</small></div>
-                <div>
-                    <button class="btn-report" onclick="openReport('${item.id}', '${item.name}')">REPORT</button>
-                    <button class="btn-remove" onclick="remove(${index})">REMOVE</button>
-                </div>
-            </div>`;
+        listDiv.innerHTML += `<div class="scan-item"><div class="item-info"><b>${item.name}</b><small>${item.id}</small></div><div><button class="btn-report" onclick="openReport('${item.id}', '${item.name}')">REPORT</button><button class="btn-remove" onclick="remove(${index})">REMOVE</button></div></div>`;
     });
     document.getElementById('count').innerText = basket.length;
     document.getElementById('listContainer').style.display = basket.length > 0 ? "block" : "none";
@@ -327,30 +311,34 @@ async function sendRequest() {
     .then(() => { alert("Requested!"); location.reload(); });
 }
 
+// --- DIGITAL BEEP FEEDBACK (WEB AUDIO API) ---
 function triggerFeedback(type) {
-    const beep = document.getElementById('beepSound');
-    const errorBeep = document.getElementById('errorSound');
-    
-    // Maximize volume
-    beep.volume = 1.0;
-    errorBeep.volume = 1.0;
+    if (!audioCtx) initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const playTone = (freq, duration, waveType) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = waveType;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    };
 
     if(type === 'success') {
-        beep.currentTime = 0;
-        // Make it high pitch
-        beep.playbackRate = 1.3; 
-        beep.play().catch(e => console.log("Audio blocked"));
-        
-        if(window.navigator.vibrate) window.navigator.vibrate(150);
+        playTone(2000, 0.1, 'square'); // High pitch short beep
+        if(window.navigator.vibrate) window.navigator.vibrate(100);
         document.body.classList.add('scan-success-flash');
-        setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
+        setTimeout(() => document.body.classList.remove('scan-success-flash'), 150);
     } else {
-        errorBeep.currentTime = 0;
-        errorBeep.play().catch(e => console.log("Audio blocked"));
-        
-        if(window.navigator.vibrate) window.navigator.vibrate([300, 100, 300]);
+        playTone(150, 0.4, 'sawtooth'); // Low rough buzz
+        if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
         document.body.classList.add('scan-error-flash');
-        setTimeout(() => { document.body.classList.remove('scan-error-flash'); }, 300);
+        setTimeout(() => document.body.classList.remove('scan-error-flash'), 300);
     }
 }
 </script>
