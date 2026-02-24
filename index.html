@@ -44,23 +44,33 @@ role.addEventListener("change", () => {
   pmLogin.style.display = role.value === "pm" ? "block" : "none";
 });
 
+// --- FUNGSI LOGIN (TANPA POPUP) ---
 function login() {
+  const userVal = document.getElementById("username").value;
+  const passVal = document.getElementById("password").value;
+  const pmVal = document.getElementById("pmid").value;
+
   if (role.value === "production") {
-    if (document.getElementById("username").value === "production" && document.getElementById("password").value === "1234") {
-      alert("Login successful.");
+    if (userVal === "production" && passVal === "1234") {
       window.location.href = "production.html";
     } else {
-      alert("Invalid credentials.");
+      console.log("Invalid credentials."); 
     }
   } else {
-    if (document.getElementById("pmid").value.startsWith("PM")) {
-      alert("PM authentication successful.");
+    if (pmVal.startsWith("PM")) {
       window.location.href = "pm.html";
     } else {
-      alert("Invalid PM ID.");
+      console.log("Invalid PM ID.");
     }
   }
 }
+
+// --- FUNGSI TEKAN ENTER ---
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    login();
+  }
+});
 </script>
 </body>
 </html>
