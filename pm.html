@@ -97,6 +97,18 @@
     <div class="card request-card">
         <h2>REQUEST NEW ASSET</h2>
         <input id="reqItem" placeholder="Item Name" class="input-dark">
+        
+        <label style="color:#facc15;">CATEGORY</label>
+        <select id="reqCategory" class="input-dark">
+            <option value="General">General</option>
+            <option value="Electronics">Electronics</option>
+            <option value="FOH">FOH</option>
+            <option value="Accessories">Accessories</option>
+            <option value="Lighting">Lighting</option>
+            <option value="Audio">Audio</option>
+            <option value="Visual">Visual</option>
+        </select>
+
         <label style="color:#facc15;">PHOTO (OPTIONAL)</label>
         <input type="file" id="reqPhoto" accept="image/*" capture="environment" style="margin-top:5px;">
         <button id="btnRequest" onclick="sendRequest()" style="border: 1px solid #facc15; background:none; color: #facc15; margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px;">SEND REQUEST</button>
@@ -149,9 +161,8 @@ const db = firebase.database();
 let scanner;
 let basket = [];
 let activeReportId = null;
-
-// Audio Context Setup
 let audioCtx;
+
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
@@ -188,7 +199,7 @@ window.onload = () => {
 
 async function toggleScanner(start) {
     if(start) {
-        initAudio(); // Activate audio on user click
+        initAudio(); 
         const pm = document.getElementById('pmName').value;
         if(!pm) return alert("Please enter your name first!");
         document.getElementById('startBtn').style.display = 'none';
@@ -294,11 +305,15 @@ async function confirmAndSubmit() {
     } catch(e) { alert("Error!"); btn.disabled = false; }
 }
 
+// UPDATE: Function hantar request dengan Category
 async function sendRequest() {
     const pm = document.getElementById('pmName').value;
     const item = document.getElementById('reqItem').value;
+    const category = document.getElementById('reqCategory').value; // Ambil nilai category
     const file = document.getElementById('reqPhoto').files[0];
+
     if(!pm || !item) return alert("Name and Item required!");
+
     let imgBase64 = "";
     if(file) {
         const reader = new FileReader();
@@ -307,11 +322,20 @@ async function sendRequest() {
             reader.readAsDataURL(file);
         });
     }
-    db.ref("requests").push({ name: item, requestedBy: pm, itemImage: imgBase64, timestamp: Date.now() })
-    .then(() => { alert("Requested!"); location.reload(); });
+
+    db.ref("requests").push({ 
+        name: item, 
+        category: category, // Hantar category sekali
+        requestedBy: pm, 
+        itemImage: imgBase64, 
+        timestamp: Date.now() 
+    })
+    .then(() => { 
+        alert("Requested!"); 
+        location.reload(); 
+    });
 }
 
-// --- DIGITAL BEEP FEEDBACK (WEB AUDIO API) ---
 function triggerFeedback(type) {
     if (!audioCtx) initAudio();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -330,12 +354,12 @@ function triggerFeedback(type) {
     };
 
     if(type === 'success') {
-        playTone(2000, 0.1, 'square'); // High pitch short beep
+        playTone(2000, 0.1, 'square'); 
         if(window.navigator.vibrate) window.navigator.vibrate(100);
         document.body.classList.add('scan-success-flash');
         setTimeout(() => document.body.classList.remove('scan-success-flash'), 150);
     } else {
-        playTone(150, 0.4, 'sawtooth'); // Low rough buzz
+        playTone(150, 0.4, 'sawtooth'); 
         if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
         document.body.classList.add('scan-error-flash');
         setTimeout(() => document.body.classList.remove('scan-error-flash'), 300);
