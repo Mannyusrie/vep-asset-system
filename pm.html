@@ -26,7 +26,6 @@
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); padding-top: 60px; }
         .modal-content { background: #111; margin: auto; padding: 20px; border: 1px solid #facc15; width: 85%; border-radius: 15px; }
 
-        /* --- DETAILED MONITOR TABLE --- */
         .inventory-monitor { margin-top: 30px; }
         .table-wrapper { overflow-x: auto; background: rgba(255,255,255,0.02); border-radius: 15px; border: 1px solid #222; }
         .monitor-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
@@ -46,6 +45,9 @@
     </style>
 </head>
 <body>
+
+<audio id="beepSound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
+<audio id="errorSound" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
 
 <header style="padding: 15px; text-align: center; border-bottom: 1px solid rgba(0,210,255,0.1);">
     <h1 style="font-size: 14px; letter-spacing: 2px; color: var(--saber-blue);">V.E.P | ASSET TRACKER</h1>
@@ -92,8 +94,7 @@
                         <th>Last Update</th>
                     </tr>
                 </thead>
-                <tbody id="inventoryBody">
-                    </tbody>
+                <tbody id="inventoryBody"></tbody>
             </table>
         </div>
     </div>
@@ -137,7 +138,6 @@
 </div>
 
 <script>
-// --- FIREBASE CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
     authDomain: "vep-inventory.firebaseapp.com",
@@ -154,7 +154,6 @@ let scanner;
 let basket = [];
 let activeReportId = null;
 
-// --- DETAILED MONITOR FUNCTION ---
 function startInventoryMonitor() {
     const inventoryBody = document.getElementById('inventoryBody');
     db.ref("items").on("value", (snapshot) => {
@@ -162,13 +161,10 @@ function startInventoryMonitor() {
         snapshot.forEach((childSnapshot) => {
             const item = childSnapshot.val();
             const id = childSnapshot.key;
-            
             let statusClass = "status-available";
             if(item.status === "In Use") statusClass = "status-inuse";
             if(item.status === "DAMAGED") statusClass = "status-damaged";
-
             const timeStr = item.lastUpdate ? new Date(item.lastUpdate).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : "-";
-
             inventoryBody.innerHTML += `
                 <tr>
                     <td><b style="color:#fff">${item.name}</b><br><small style="color:#555">${id}</small></td>
@@ -190,7 +186,6 @@ function filterInventory() {
     }
 }
 
-// --- APP LOGIC ---
 window.onload = () => {
     if(localStorage.getItem('pmName')) document.getElementById('pmName').value = localStorage.getItem('pmName');
     startInventoryMonitor();
@@ -215,7 +210,10 @@ async function toggleScanner(start) {
 }
 
 function handleScannedCode(id) {
-    if(basket.find(x => x.id === id)) return alert("Item already in cart.");
+    if(basket.find(x => x.id === id)) {
+        triggerFeedback('error');
+        return alert("Item already in cart.");
+    }
     db.ref("items/" + id).once("value", (snap) => {
         const data = snap.val();
         if(data) {
@@ -228,6 +226,7 @@ function handleScannedCode(id) {
             basket.push({ id: id, name: data.name });
             renderList();
         } else {
+            triggerFeedback('error');
             alert("Item not found!");
         }
     });
@@ -324,11 +323,18 @@ async function sendRequest() {
 }
 
 function triggerFeedback(type) {
+    const beep = document.getElementById('beepSound');
+    const errorBeep = document.getElementById('errorSound');
+
     if(type === 'success') {
+        beep.currentTime = 0;
+        beep.play().catch(e => console.log("Audio blocked"));
         if(window.navigator.vibrate) window.navigator.vibrate(100);
         document.body.classList.add('scan-success-flash');
         setTimeout(() => { document.body.classList.remove('scan-success-flash'); }, 150);
     } else {
+        errorBeep.currentTime = 0;
+        errorBeep.play().catch(e => console.log("Audio blocked"));
         if(window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
         document.body.classList.add('scan-error-flash');
         setTimeout(() => { document.body.classList.remove('scan-error-flash'); }, 300);
