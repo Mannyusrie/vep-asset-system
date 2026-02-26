@@ -3,48 +3,73 @@
 <head>
   <title>V.E.P Login</title>
   <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Tambahan sikit untuk bagi login box nampak lebih 'Saber' */
+    .card {
+        transition: transform 0.3s ease;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    footer {
+        text-align: center;
+        padding: 20px;
+        font-size: 10px;
+        color: #444;
+        letter-spacing: 2px;
+    }
+  </style>
 </head>
 <body>
 
 <header>
-  <img src="logo.png" style="height: 40px;">
-  <h1>V.E.P | Asset Management System</h1>
+  <div style="display: flex; align-items: center; gap: 15px;">
+      <img src="logo.png" style="height: 40px;">
+      <h1>V.E.P | <span style="color: var(--saber-blue); text-shadow: var(--saber-glow);">ASSET MANAGEMENT</span></h1>
+  </div>
 </header>
 
 <div class="container">
-  <div class="card" style="max-width: 500px; margin: auto;">
-    <h2>System Login</h2>
+  <div class="card" style="max-width: 450px; margin: 80px auto;">
+    <h2 style="text-align: center; margin-bottom: 25px;">SYSTEM ACCESS</h2>
+    
+    <label style="font-size: 11px; color: var(--saber-blue);">SELECT PORTAL</label>
     <select id="role">
-      <option value="production">Production</option>
-      <option value="pm">Project Manager</option>
+      <option value="production">PRODUCTION TEAM</option>
+      <option value="pm">PROJECT MANAGER</option>
     </select>
 
-    <div id="productionLogin">
+    <div id="productionLogin" style="margin-top: 20px;">
+      <label style="font-size: 11px;">CREDENTIALS</label>
       <input type="text" id="username" placeholder="Username">
       <input type="password" id="password" placeholder="Password">
     </div>
 
-    <div id="pmLogin" style="display:none;">
-      <input type="text" id="pmid" placeholder="Enter Project Manager ID">
+    <div id="pmLogin" style="display:none; margin-top: 20px;">
+      <label style="font-size: 11px;">ACCESS KEY</label>
+      <input type="text" id="pmid" placeholder="Enter Project Manager ID (PMxxx)">
     </div>
 
-    <button onclick="login()" style="width: 100%;">Login</button>
+    <button onclick="login()" style="width: 100%; margin-top: 30px;">IGNITE SYSTEM</button>
+    <p id="errorMsg" style="color: #ff4444; font-size: 12px; text-align: center; margin-top: 15px; display: none;">Invalid Access! Please try again.</p>
   </div>
 </div>
 
-<footer>© 2026 Virtual Event Production (V.E.P)</footer>
+<footer>© 2026 VIRTUAL EVENT PRODUCTION (V.E.P)</footer>
 
 <script>
 const role = document.getElementById("role");
 const productionLogin = document.getElementById("productionLogin");
 const pmLogin = document.getElementById("pmLogin");
+const errorMsg = document.getElementById("errorMsg");
 
 role.addEventListener("change", () => {
   productionLogin.style.display = role.value === "production" ? "block" : "none";
   pmLogin.style.display = role.value === "pm" ? "block" : "none";
+  errorMsg.style.display = "none";
 });
 
-// --- FUNGSI LOGIN (TANPA POPUP) ---
 function login() {
   const userVal = document.getElementById("username").value;
   const passVal = document.getElementById("password").value;
@@ -54,18 +79,22 @@ function login() {
     if (userVal === "production" && passVal === "1234") {
       window.location.href = "production.html";
     } else {
-      console.log("Invalid credentials."); 
+      showError();
     }
   } else {
-    if (pmVal.startsWith("PM")) {
+    if (pmVal.toUpperCase().startsWith("PM")) {
       window.location.href = "pm.html";
     } else {
-      console.log("Invalid PM ID.");
+      showError();
     }
   }
 }
 
-// --- FUNGSI TEKAN ENTER ---
+function showError() {
+    errorMsg.style.display = "block";
+    setTimeout(() => { errorMsg.style.display = "none"; }, 3000);
+}
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     login();
