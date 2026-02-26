@@ -16,6 +16,7 @@
             min-width: 60px; border-radius: 8px;
             overflow: hidden; border: 1px solid #333;
             background: #000; display: flex; align-items: center; justify-content: center;
+            cursor: zoom-in;
         }
         .img-box img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -26,7 +27,7 @@
         }
 
         /* Table Spacing Fix */
-        table { border-collapse: separate; border-spacing: 0 8px; width: 100%; }
+        table { border-collapse: separate; border-spacing: 0 12px; width: 100%; }
         td { padding: 12px 15px; background: rgba(255,255,255,0.02); vertical-align: middle; }
         
         .btn-qr { 
@@ -39,7 +40,18 @@
         #requestSection { border: 2px solid #facc15; }
         #damageSection { border: 2px solid #ff4444; }
 
-        /* Print Style - Hanya keluar bila print */
+        /* IMAGE LIGHTBOX (POPUP GAMBAR BESAR) */
+        #imageModal {
+            display: none; position: fixed; z-index: 10000; top: 0; left: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.9);
+            justify-content: center; align-items: center; cursor: zoom-out;
+        }
+        #imageModal img { 
+            max-width: 90%; max-height: 90%; border: 2px solid var(--saber-blue); 
+            border-radius: 10px; box-shadow: 0 0 30px rgba(0,210,255,0.5); 
+        }
+
+        /* Print Style */
         @media print {
             body * { visibility: hidden; }
             #printableArea, #printableArea * { visibility: visible; }
@@ -103,9 +115,6 @@
                 <option value="MAIN STORE">MAIN STORE</option>
                 <option value="ON VENUE">ON VENUE</option>
             </select>
-            <select id="filterCat" class="filter-input" onchange="runFilters()">
-                <option value="ALL">ALL CATEGORIES</option>
-            </select>
         </div>
 
         <div style="overflow-x: auto;">
@@ -131,15 +140,17 @@
         <h2 id="qrLabel" style="color:#000; margin-top:10px; border:none; font-size: 20px;"></h2>
         <p style="margin:0; font-size:10px; font-weight:bold; color:#000;">V.E.P ASSET MANAGEMENT</p>
     </div>
-    
     <div style="margin-top:25px; display:flex; gap:15px;">
         <button onclick="printQR()" style="background:#4ade80; color:#000; width:auto; padding:12px 35px; border:none;">PRINT STICKER</button>
         <button onclick="document.getElementById('qrModal').style.display='none'" style="background:#333; color:#fff; width:auto; padding:12px 35px; border:none;">CLOSE</button>
     </div>
 </div>
 
+<div id="imageModal" onclick="this.style.display='none'">
+    <img id="fullImage" src="">
+</div>
+
 <script>
-// --- CONFIG FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
     authDomain: "vep-inventory.firebaseapp.com",
@@ -152,7 +163,14 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// --- PREVIEW & COMPRESS ---
+// --- IMAGE HELPERS ---
+function zoomImg(src) {
+    const modal = document.getElementById('imageModal');
+    const fullImg = document.getElementById('fullImage');
+    fullImg.src = src;
+    modal.style.display = 'flex';
+}
+
 function previewImage(input) {
     const preview = document.getElementById('photoPreview');
     if (input.files && input.files[0]) {
@@ -213,10 +231,10 @@ db.ref("items").on("value", (snap) => {
         const item = child.val();
         const isStore = ["OFFICE", "MAIN STORE"].includes(item.location);
         
-        // SANGKAR GAMBAR FIX
+        // SANGKAR GAMBAR DENGAN FUNGSI ZOOM BARU
         const imgHTML = `
             <div class="img-box">
-                ${item.image ? `<img src="${item.image}" onclick="window.open(this.src)">` : `<small style="color:#333">NO IMG</small>`}
+                ${item.image ? `<img src="${item.image}" onclick="zoomImg(this.src)">` : `<small style="color:#333">NO IMG</small>`}
             </div>`;
 
         if(item.status === "DAMAGED") {
@@ -247,7 +265,7 @@ db.ref("items").on("value", (snap) => {
     damageSection.style.display = dCount > 0 ? "block" : "none";
 });
 
-// --- PRINT & QR ---
+// --- QR & PRINT ---
 function showQR(id, name) {
     const canvas = document.getElementById('qrCanvas');
     document.getElementById('qrLabel').innerText = name.toUpperCase();
@@ -256,9 +274,7 @@ function showQR(id, name) {
     });
 }
 
-function printQR() {
-    window.print();
-}
+function printQR() { window.print(); }
 
 async function markAsFixed(id) {
     if(confirm("Confirm item is repaired?")) {
