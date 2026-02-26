@@ -26,21 +26,36 @@
             background: #050505; 
         }
 
-        /* Table Spacing Fix */
+        /* Table Spacing */
         table { border-collapse: separate; border-spacing: 0 12px; width: 100%; }
         td { padding: 12px 15px; background: rgba(255,255,255,0.02); vertical-align: middle; }
         
-        .btn-qr { 
-            background: transparent; color: var(--saber-blue); border: 1px solid var(--saber-blue);
+        /* DESIGN BUTANG BARU (IKUT REFRESH) */
+        .btn-qr, .btn-delete-new { 
+            background: transparent;
             padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;
+            transition: 0.3s; text-transform: uppercase;
         }
+
+        /* Style Butang QR */
+        .btn-qr { color: var(--saber-blue); border: 1px solid var(--saber-blue); }
         .btn-qr:hover { background: var(--saber-blue); color: #000; box-shadow: var(--saber-glow); }
+
+        /* Style Butang DELETE (Sama macam Refresh tapi Merah) */
+        .btn-delete-new { 
+            color: #ff4444; border: 1px solid #ff4444; 
+            margin-right: 5px;
+        }
+        .btn-delete-new:hover { 
+            background: #ff4444; color: #fff; 
+            box-shadow: 0 0 15px rgba(255, 68, 68, 0.4); 
+        }
 
         #requestSection, #damageSection { margin-bottom: 25px; border-radius: 15px; overflow: hidden; }
         #requestSection { border: 2px solid #facc15; }
         #damageSection { border: 2px solid #ff4444; }
 
-        /* IMAGE LIGHTBOX (POPUP GAMBAR BESAR) */
+        /* IMAGE LIGHTBOX */
         #imageModal {
             display: none; position: fixed; z-index: 10000; top: 0; left: 0;
             width: 100%; height: 100%; background: rgba(0,0,0,0.9);
@@ -51,7 +66,6 @@
             border-radius: 10px; box-shadow: 0 0 30px rgba(0,210,255,0.5); 
         }
 
-        /* Print Style */
         @media print {
             body * { visibility: hidden; }
             #printableArea, #printableArea * { visibility: visible; }
@@ -125,7 +139,7 @@
                         <th>ITEM DETAILS</th>
                         <th>LOCATION</th>
                         <th>STATUS</th>
-                        <th>ACTION</th>
+                        <th style="width:180px">ACTION</th>
                     </tr>
                 </thead>
                 <tbody id="inventoryTable"></tbody>
@@ -151,6 +165,7 @@
 </div>
 
 <script>
+// (Firebase Config Kekal Sama)
 const firebaseConfig = {
     apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
     authDomain: "vep-inventory.firebaseapp.com",
@@ -163,7 +178,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// --- IMAGE HELPERS ---
 function zoomImg(src) {
     const modal = document.getElementById('imageModal');
     const fullImg = document.getElementById('fullImage');
@@ -199,17 +213,14 @@ function compressImage(file) {
     });
 }
 
-// --- ADD ITEM ---
 async function addItem() {
     const name = document.getElementById('invName').value.trim();
     const cat = document.getElementById('invCat').value.trim();
     const loc = document.getElementById('invLoc').value;
     const imgFile = document.getElementById('invImg').files[0];
     if(!name) return alert("Enter Item Name!");
-    
     document.getElementById('btnAdd').disabled = true;
     let imgBase64 = imgFile ? await compressImage(imgFile) : "";
-    
     const newRef = db.ref("items").push();
     await newRef.set({
         id: newRef.key, name, category: cat || "General",
@@ -219,7 +230,6 @@ async function addItem() {
     alert("Success!"); location.reload();
 }
 
-// --- REALTIME DATA ---
 db.ref("items").on("value", (snap) => {
     const table = document.getElementById("inventoryTable");
     const damageTable = document.getElementById("damageTable");
@@ -230,12 +240,7 @@ db.ref("items").on("value", (snap) => {
     snap.forEach((child) => {
         const item = child.val();
         const isStore = ["OFFICE", "MAIN STORE"].includes(item.location);
-        
-        // SANGKAR GAMBAR DENGAN FUNGSI ZOOM BARU
-        const imgHTML = `
-            <div class="img-box">
-                ${item.image ? `<img src="${item.image}" onclick="zoomImg(this.src)">` : `<small style="color:#333">NO IMG</small>`}
-            </div>`;
+        const imgHTML = `<div class="img-box">${item.image ? `<img src="${item.image}" onclick="zoomImg(this.src)">` : `<small style="color:#333">NO IMG</small>`}</div>`;
 
         if(item.status === "DAMAGED") {
             dCount++;
@@ -256,8 +261,8 @@ db.ref("items").on("value", (snap) => {
                 <td><b style="color:#fff; font-size:15px;">${item.name}</b><br><small style="color:#666">${item.category}</small></td>
                 <td><span class="location-tag">${item.location}</span></td>
                 <td><span class="${sClass}">● ${sText}</span><br><small style="color:#444">${item.job || ""}</small></td>
-                <td>
-                    <button class="btn-delete" onclick="if(confirm('Delete?')) db.ref('items/${child.key}').remove()">DEL</button>
+                <td style="white-space: nowrap;">
+                    <button class="btn-delete-new" onclick="if(confirm('Delete this item?')) db.ref('items/${child.key}').remove()">DELETE</button>
                     <button class="btn-qr" onclick="showQR('${child.key}', '${item.name}')">QR</button>
                 </td>
             </tr>`;
@@ -265,7 +270,6 @@ db.ref("items").on("value", (snap) => {
     damageSection.style.display = dCount > 0 ? "block" : "none";
 });
 
-// --- QR & PRINT ---
 function showQR(id, name) {
     const canvas = document.getElementById('qrCanvas');
     document.getElementById('qrLabel').innerText = name.toUpperCase();
@@ -273,15 +277,12 @@ function showQR(id, name) {
         if(!err) document.getElementById('qrModal').style.display='flex';
     });
 }
-
 function printQR() { window.print(); }
-
 async function markAsFixed(id) {
     if(confirm("Confirm item is repaired?")) {
         await db.ref("items/" + id).update({ status: "Available", location: "MAIN STORE", lastReport: null });
     }
 }
-
 function runFilters() {
     const s = document.getElementById('searchBox').value.toUpperCase();
     const rows = document.querySelectorAll("#inventoryTable tr");
