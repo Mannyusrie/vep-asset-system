@@ -30,22 +30,34 @@
         table { border-collapse: separate; border-spacing: 0 12px; width: 100%; }
         td { padding: 12px 15px; background: rgba(255,255,255,0.02); vertical-align: middle; }
         
-        /* DESIGN BUTANG BARU (IKUT REFRESH) */
-        .btn-qr, .btn-delete-new { 
+        /* DESIGN BUTANG STACKED (ATAS BAWAH) */
+        .action-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100px; /* Lebar tetap supaya kemas */
+        }
+
+        .btn-action { 
             background: transparent;
-            padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;
-            transition: 0.3s; text-transform: uppercase;
+            padding: 8px 0; /* Guna padding atas bawah je */
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 11px;
+            transition: 0.3s; 
+            text-transform: uppercase;
+            text-align: center;
+            width: 100%; /* Penuhkan sangkar action-cell */
+            display: block;
         }
 
         /* Style Butang QR */
-        .btn-qr { color: var(--saber-blue); border: 1px solid var(--saber-blue); }
-        .btn-qr:hover { background: var(--saber-blue); color: #000; box-shadow: var(--saber-glow); }
+        .btn-qr-new { color: var(--saber-blue); border: 1px solid var(--saber-blue); }
+        .btn-qr-new:hover { background: var(--saber-blue); color: #000; box-shadow: var(--saber-glow); }
 
-        /* Style Butang DELETE (Sama macam Refresh tapi Merah) */
-        .btn-delete-new { 
-            color: #ff4444; border: 1px solid #ff4444; 
-            margin-right: 5px;
-        }
+        /* Style Butang DELETE */
+        .btn-delete-new { color: #ff4444; border: 1px solid #ff4444; }
         .btn-delete-new:hover { 
             background: #ff4444; color: #fff; 
             box-shadow: 0 0 15px rgba(255, 68, 68, 0.4); 
@@ -139,7 +151,7 @@
                         <th>ITEM DETAILS</th>
                         <th>LOCATION</th>
                         <th>STATUS</th>
-                        <th style="width:180px">ACTION</th>
+                        <th style="width:100px">ACTION</th>
                     </tr>
                 </thead>
                 <tbody id="inventoryTable"></tbody>
@@ -165,7 +177,7 @@
 </div>
 
 <script>
-// (Firebase Config Kekal Sama)
+// (Firebase Config)
 const firebaseConfig = {
     apiKey: "AIzaSyBf_L5FuHaaERVG4N2qMl_4HIk-3-nw9Mk",
     authDomain: "vep-inventory.firebaseapp.com",
@@ -261,9 +273,11 @@ db.ref("items").on("value", (snap) => {
                 <td><b style="color:#fff; font-size:15px;">${item.name}</b><br><small style="color:#666">${item.category}</small></td>
                 <td><span class="location-tag">${item.location}</span></td>
                 <td><span class="${sClass}">● ${sText}</span><br><small style="color:#444">${item.job || ""}</small></td>
-                <td style="white-space: nowrap;">
-                    <button class="btn-delete-new" onclick="if(confirm('Delete this item?')) db.ref('items/${child.key}').remove()">DELETE</button>
-                    <button class="btn-qr" onclick="showQR('${child.key}', '${item.name}')">QR</button>
+                <td>
+                    <div class="action-cell">
+                        <button class="btn-action btn-delete-new" onclick="if(confirm('Delete this item?')) db.ref('items/${child.key}').remove()">DELETE</button>
+                        <button class="btn-action btn-qr-new" onclick="showQR('${child.key}', '${item.name}')">QR</button>
+                    </div>
                 </td>
             </tr>`;
     });
