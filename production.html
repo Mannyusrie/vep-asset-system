@@ -10,7 +10,7 @@
         h2 { border-bottom: 1px solid rgba(0, 210, 255, 0.2); padding-bottom: 15px; margin-bottom: 20px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         
-        /* FIX BERTINDIH: Sangkar Gambar */
+
         .img-box {
             width: 60px; height: 60px; 
             min-width: 60px; border-radius: 8px;
@@ -30,17 +30,17 @@
         table { border-collapse: separate; border-spacing: 0 12px; width: 100%; }
         td { padding: 12px 15px; background: rgba(255,255,255,0.02); vertical-align: middle; }
         
-        /* DESIGN BUTANG STACKED (ATAS BAWAH) */
+      
         .action-cell {
             display: flex;
             flex-direction: column;
             gap: 6px;
-            width: 100px; /* Lebar tetap supaya kemas */
+            width: 100px;
         }
 
         .btn-action { 
             background: transparent;
-            padding: 8px 0; /* Guna padding atas bawah je */
+            padding: 8px 0; 
             border-radius: 8px; 
             font-weight: bold; 
             cursor: pointer; 
@@ -48,15 +48,15 @@
             transition: 0.3s; 
             text-transform: uppercase;
             text-align: center;
-            width: 100%; /* Penuhkan sangkar action-cell */
+            width: 100%;
             display: block;
         }
 
-        /* Style Butang QR */
+       
         .btn-qr-new { color: var(--saber-blue); border: 1px solid var(--saber-blue); }
         .btn-qr-new:hover { background: var(--saber-blue); color: #000; box-shadow: var(--saber-glow); }
 
-        /* Style Butang DELETE */
+       
         .btn-delete-new { color: #ff4444; border: 1px solid #ff4444; }
         .btn-delete-new:hover { 
             background: #ff4444; color: #fff; 
@@ -67,7 +67,7 @@
         #requestSection { border: 2px solid #facc15; }
         #damageSection { border: 2px solid #ff4444; }
 
-        /* IMAGE LIGHTBOX */
+       
         #imageModal {
             display: none; position: fixed; z-index: 10000; top: 0; left: 0;
             width: 100%; height: 100%; background: rgba(0,0,0,0.9);
@@ -308,3 +308,4 @@ function runFilters() {
 </script>
 </body>
 </html>
+
